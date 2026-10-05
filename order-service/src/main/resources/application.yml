@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: order-service
+  main:
+    banner-mode: off
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  flyway:
+    locations: classpath:db/migration/order
+    default-schema: ${DB_SCHEMA}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
+logging:
+  structured:
+    format:
+      console: logstash
