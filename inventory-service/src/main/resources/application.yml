@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: inventory-service
+  main:
+    banner-mode: off
+    keep-alive: true
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  flyway:
+    locations: classpath:db/migration/inventory
+    default-schema: ${DB_SCHEMA}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
+logging:
+  structured:
+    format:
+      console: logstash

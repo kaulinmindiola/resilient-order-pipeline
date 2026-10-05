@@ -17,6 +17,7 @@
     <packaging>pom</packaging>
     <modules>
         <module>order-service</module>
+        <module>inventory-service</module>
     </modules>
 
     <name>Resilient Order Pipeline</name>
