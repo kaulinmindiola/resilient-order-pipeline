@@ -1,0 +1,97 @@
+---
+status: accepted
+date: 2026-10-05
+decision-makers: KM
+---
+
+# ADR-0011: Make consumers idempotent inside a single local transaction
+
+## Context and Problem Statement
+
+Delivery is *at-least-once* everywhere: the outbox publisher can republish ([ADR-0001](0001-transactional-outbox-polling-publisher.md)) and a consumer can crash between the database commit and the offset commit. No component assumes exactly-once. BR-007 and REQ-FUNC-016 require that a consumer applies the same event only once, even when it is delivered twice or concurrently.
+
+How does a consumer deduplicate events safely, and when is the Kafka offset committed?
+
+## Decision Drivers
+
+* BR-006 / BR-007 / REQ-FUNC-016: unique `eventId`, effect applied once per `(event_id, consumer)`.
+* Correctness under concurrent delivery of the same event.
+* No distributed transactions between Kafka and PostgreSQL.
+* Invalid transitions and unknown aggregates must be quiet no-ops (BR-014, REQ-FUNC-019).
+
+## Considered Options
+
+* One local transaction: `claim` (`INSERT ... ON CONFLICT DO NOTHING`) + business effect + outbox write, with the offset committed after the commit (`AckMode.RECORD`)
+* Check-then-insert (`SELECT` for existence, then `INSERT`)
+* Commit the offset before processing
+* Rely only on naturally idempotent state changes
+* Kafka transactions / exactly-once semantics
+
+## Decision Outcome
+
+Chosen option: **"One local transaction with an insert-based claim"**, because the primary key resolves duplicates, including concurrent ones, with no extra locking logic.
+
+```text
+handle(event):
+    @Transactional
+        if not processedEvents.claim(event.eventId, CONSUMER):   # INSERT ... ON CONFLICT DO NOTHING
+            log INFO "duplicate"; return                          # 0 rows = already processed
+        outcome = applyBusinessEffect(event)                      # no-op if the transition is invalid
+        if outcome.outgoingEvent present:                         # inventory-service only
+            outbox.save(outcome.outgoingEvent)
+    # the offset is committed after the transaction commits (AckMode.RECORD)
+```
+
+* `processed_events` has primary key `(event_id, consumer)`; `consumer` equals the consumer group name.
+* For two concurrent deliveries of the same event, the second `INSERT` waits for the first transaction to finish and then inserts 0 rows.
+* Auto-commit is disabled; the offset is acknowledged only after the database commit.
+* An invalid transition, or an event for a non-existent aggregate, is recorded as processed, logged at WARN, and causes no exception, retry or DLT entry.
+
+### Consequences
+
+* Good, because the primary key also covers concurrent duplicates.
+* Good, because committing the offset *after* the commit can only produce duplicates that are already absorbed, never lost effects.
+* Good, because a rejection or outgoing event is atomic with the claim ([ADR-0010](0010-atomic-conditional-update-for-stock-reservation.md), [ADR-0013](0013-outbox-in-inventory-service.md)).
+* Bad, because a crash between the commit and the offset commit causes reprocessing; the claim turns it into a no-op.
+* Bad, because `processed_events` grows without bound; purging is out of scope.
+
+### Confirmation
+
+* Test 8 (*duplicate*): the same `eventId` delivered twice produces one decrement; the second delivery is a logged no-op.
+* Test 9 (*consumer restart*): restarting `inventory-service` with in-flight messages neither loses nor duplicates effects.
+* Test 12 (*invalid transition*): `InventoryReserved` on a `REJECTED` order is a no-op with no exception and no DLT.
+
+Verified in Phase 7 (`inventory-service`) and Phase 8 (`order-service`).
+
+## Pros and Cons of the Options
+
+### Single local transaction with insert-based claim
+
+* Good, because deduplication and effect commit or roll back together.
+* Good, because it needs no locks beyond the primary key.
+* Bad, because it adds one table and one insert per processed event.
+
+### Check-then-insert
+
+* Good, because it is intuitive.
+* Bad, because two concurrent deliveries can both pass the check, so duplicates slip through.
+
+### Commit the offset before processing
+
+* Good, because it avoids reprocessing.
+* Bad, because a crash after the offset but before the effect loses the event permanently.
+
+### Natural idempotency only
+
+* Good, because it needs no extra table.
+* Bad, because a stock decrement is not idempotent, so it cannot protect the reservation.
+
+### Kafka transactions / exactly-once
+
+* Good, because it is a standard feature.
+* Bad, because it is out of scope: Kafka must never participate in a database transaction.
+
+## More Information
+
+* Related: [ADR-0001](0001-transactional-outbox-polling-publisher.md), [ADR-0004](0004-consumer-retry-and-dead-letter-topics.md), [ADR-0010](0010-atomic-conditional-update-for-stock-reservation.md), [ADR-0013](0013-outbox-in-inventory-service.md).
+* Requirements: BR-006, BR-007, BR-014, REQ-FUNC-016, REQ-FUNC-019.
