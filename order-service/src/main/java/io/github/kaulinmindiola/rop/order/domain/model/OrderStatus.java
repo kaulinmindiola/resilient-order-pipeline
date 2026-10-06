@@ -6,5 +6,10 @@ package io.github.kaulinmindiola.rop.order.domain.model;
 public enum OrderStatus {
     PENDING,
     CONFIRMED,
-    REJECTED
+    REJECTED;
+
+    /** A terminal status accepts no further transitions (BR-017). */
+    public boolean isTerminal() {
+        return this != PENDING;
+    }
 }

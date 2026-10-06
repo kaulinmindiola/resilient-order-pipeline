@@ -7,7 +7,8 @@ import java.util.UUID;
 
 /**
  * Order aggregate. The only way to create a new order is {@link #create}, which guarantees that
- * every instance satisfies BR-001, BR-002, BR-003 and BR-018.
+ * every instance satisfies BR-001, BR-002, BR-003 and BR-018. Status changes go through {@link
+ * #confirm} and {@link #reject}, which only act on a PENDING order (BR-014, BR-017).
  */
 public final class Order {
 
@@ -46,6 +47,27 @@ public final class Order {
         List<OrderItem> snapshot = List.copyOf(items);
         Money total = snapshot.stream().map(OrderItem::subtotal).reduce(Money.ZERO, Money::add);
         return new Order(id, OrderStatus.PENDING, snapshot, total, now, now);
+    }
+
+    /** PENDING → CONFIRMED; a no-op on a terminal order. */
+    public TransitionResult confirm(Instant now) {
+        return transitionTo(OrderStatus.CONFIRMED, now);
+    }
+
+    /** PENDING → REJECTED; a no-op on a terminal order. */
+    public TransitionResult reject(Instant now) {
+        return transitionTo(OrderStatus.REJECTED, now);
+    }
+
+    private TransitionResult transitionTo(OrderStatus target, Instant now) {
+        Objects.requireNonNull(now, "now");
+        if (status.isTerminal()) {
+            return new TransitionResult.Ignored(status, target);
+        }
+        OrderStatus from = status;
+        status = target;
+        updatedAt = now;
+        return new TransitionResult.Applied(from, target);
     }
 
     public UUID id() {
