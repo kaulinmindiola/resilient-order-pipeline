@@ -1,5 +1,7 @@
 # Resilient Order Pipeline
 
+[![CI](https://github.com/<tu-usuario>/resilient-order-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/<tu-usuario>/resilient-order-pipeline/actions/workflows/ci.yml)
+
 A reference backend for reliable, event-driven order processing: eventual consistency and fault tolerance across two services, built on Kafka and PostgreSQL.
 
 ## Status
@@ -117,6 +119,20 @@ The core claims of this project are meant to be proven by tests, not asserted. T
 - `docs/srs.md`: requirements specification *(planned)*
 - `docs/sdd.md`: design description *(planned)*
 - `docs/events.md`: event contracts *(planned)*
+
+## Building from source
+
+Requires JDK 21 and a running Docker engine (integration tests use Testcontainers).
+
+```powershell
+.\mvnw.cmd clean verify      # Windows (PowerShell)
+```
+
+```bash
+./mvnw clean verify          # Linux / macOS
+```
+
+A full quick start with Docker Compose will be added once it has been verified from a clean clone.
 
 ## License
 
