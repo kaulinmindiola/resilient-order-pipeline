@@ -1,6 +1,6 @@
 # Resilient Order Pipeline
 
-[![CI](https://github.com/<tu-usuario>/resilient-order-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/<tu-usuario>/resilient-order-pipeline/actions/workflows/ci.yml)
+[![CI](https://github.com/kaulinmindiola/resilient-order-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/<tu-usuario>/resilient-order-pipeline/actions/workflows/ci.yml)
 
 A reference backend for reliable, event-driven order processing: eventual consistency and fault tolerance across two services, built on Kafka and PostgreSQL.
 
