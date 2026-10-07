@@ -17,13 +17,14 @@ import org.testcontainers.utility.MountableFile;
 public abstract class AbstractIntegrationTest {
 
     protected static final String DB_PASSWORD = "order-it";
+    protected static final String INVENTORY_DB_PASSWORD = "inventory-it";
     protected static final String SEED_CLIENT_ID = "it-client";
     protected static final String SEED_CLIENT_SECRET = "it-secret";
 
     protected static final PostgreSQLContainer POSTGRES =
             new PostgreSQLContainer("postgres:16")
                     .withEnv("ORDER_DB_PASSWORD", DB_PASSWORD)
-                    .withEnv("INVENTORY_DB_PASSWORD", "inventory-it")
+                    .withEnv("INVENTORY_DB_PASSWORD", INVENTORY_DB_PASSWORD)
                     .withCopyFileToContainer(
                             MountableFile.forHostPath(
                                     "../infra/postgres/init/01-schemas-and-roles.sh", 0755),
