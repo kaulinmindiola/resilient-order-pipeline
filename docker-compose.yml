@@ -54,6 +54,8 @@ services:
       DB_USER: order_svc
       DB_PASSWORD: ${ORDER_DB_PASSWORD:?ORDER_DB_PASSWORD is required}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SEED_CLIENT_ID: ${SEED_CLIENT_ID:?SEED_CLIENT_ID is required}
+      SEED_CLIENT_SECRET: ${SEED_CLIENT_SECRET:?SEED_CLIENT_SECRET is required}
     ports:
       - "8080:8080"
     depends_on:

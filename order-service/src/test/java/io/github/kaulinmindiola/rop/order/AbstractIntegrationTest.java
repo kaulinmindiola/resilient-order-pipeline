@@ -17,6 +17,8 @@ import org.testcontainers.utility.MountableFile;
 public abstract class AbstractIntegrationTest {
 
     protected static final String DB_PASSWORD = "order-it";
+    protected static final String SEED_CLIENT_ID = "it-client";
+    protected static final String SEED_CLIENT_SECRET = "it-secret";
 
     protected static final PostgreSQLContainer POSTGRES =
             new PostgreSQLContainer("postgres:16")
@@ -42,5 +44,7 @@ public abstract class AbstractIntegrationTest {
         registry.add("DB_USER", () -> "order_svc");
         registry.add("DB_PASSWORD", () -> DB_PASSWORD);
         registry.add("KAFKA_BOOTSTRAP_SERVERS", KAFKA::getBootstrapServers);
+        registry.add("SEED_CLIENT_ID", () -> SEED_CLIENT_ID);
+        registry.add("SEED_CLIENT_SECRET", () -> SEED_CLIENT_SECRET);
     }
 }
