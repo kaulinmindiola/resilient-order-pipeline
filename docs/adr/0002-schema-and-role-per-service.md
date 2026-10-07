@@ -45,9 +45,12 @@ Each role owns its schema and has no privilege on the other one ([ADR-0015](0015
 * Good, because it is verifiable: a role that tries to read the other schema gets *permission denied*.
 * Bad, because the shared instance remains a single point of failure and resource contention; acceptable since availability is not a requirement.
 
-### Confirmation
+#### Confirmation
 
-Test 15 (*schema isolation*): `order_svc` receives *permission denied* when accessing `inventory_service`. Migrations are also reviewed for the absence of cross-schema foreign keys. Verified in Phase 2.
+Verified by [`SchemaIsolationIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/SchemaIsolationIT.java):
+connected with its own credentials, `order_svc` is denied any access to `inventory_service` and
+`inventory_svc` any access to `order_service` (SQLSTATE 42501); neither role can create objects in
+`public`. The test runs on every build, so a privilege granted by mistake breaks CI.
 
 ## Pros and Cons of the Options
 
