@@ -16,6 +16,7 @@ class OrderTest {
 
     private static final UUID ORDER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final Instant NOW = Instant.parse("2026-01-15T10:00:00Z");
+    private static final Instant LATER = Instant.parse("2026-01-15T10:00:05Z");
 
     private static OrderItem item(String productId, int quantity, String unitPrice) {
         return new OrderItem(productId, quantity, Money.of(unitPrice));
@@ -91,5 +92,26 @@ class OrderTest {
 
         assertThat(order.createdAt()).isEqualTo(NOW);
         assertThat(order.updatedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("BR-017 BR-018 reconstitute restores the persisted state without recalculating it")
+    void reconstituteRestoresPersistedState() {
+        Order order =
+                Order.reconstitute(
+                        ORDER_ID,
+                        OrderStatus.CONFIRMED,
+                        List.of(item("SKU-001", 1, "19.99")),
+                        Money.of("999.99"),
+                        NOW,
+                        LATER);
+
+        assertThat(order.status()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(order.total()).isEqualTo(Money.of("999.99"));
+        assertThat(order.createdAt()).isEqualTo(NOW);
+        assertThat(order.updatedAt()).isEqualTo(LATER);
+        assertThat(order.confirm(LATER.plusSeconds(60)))
+                .isEqualTo(
+                        new TransitionResult.Ignored(OrderStatus.CONFIRMED, OrderStatus.CONFIRMED));
     }
 }

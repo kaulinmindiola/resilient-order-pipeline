@@ -49,6 +49,26 @@ public final class Order {
         return new Order(id, OrderStatus.PENDING, snapshot, total, now, now);
     }
 
+    /**
+     * Restores an order exactly as it was persisted: no validation, no recalculation, no status
+     * reset. Only for persistence adapters; business code uses {@link #create}.
+     */
+    public static Order reconstitute(
+            UUID id,
+            OrderStatus status,
+            List<OrderItem> items,
+            Money total,
+            Instant createdAt,
+            Instant updatedAt) {
+        return new Order(
+                Objects.requireNonNull(id, "id"),
+                Objects.requireNonNull(status, "status"),
+                List.copyOf(Objects.requireNonNull(items, "items")),
+                Objects.requireNonNull(total, "total"),
+                Objects.requireNonNull(createdAt, "createdAt"),
+                Objects.requireNonNull(updatedAt, "updatedAt"));
+    }
+
     /** PENDING → CONFIRMED; a no-op on a terminal order. */
     public TransitionResult confirm(Instant now) {
         return transitionTo(OrderStatus.CONFIRMED, now);
