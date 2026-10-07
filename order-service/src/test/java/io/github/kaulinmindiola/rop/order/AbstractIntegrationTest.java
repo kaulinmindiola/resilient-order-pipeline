@@ -1,6 +1,7 @@
 package io.github.kaulinmindiola.rop.order;
 
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.kafka.KafkaContainer;
@@ -11,9 +12,11 @@ import org.testcontainers.utility.MountableFile;
 /**
  * Real PostgreSQL and Kafka shared by every integration test in this service (DI-05). The
  * application is configured through the same variables Docker Compose uses and connects with the
- * service role, never as superuser (ADR-0015).
+ * service role, never as superuser (ADR-0015). MockMvc is configured here so that API tests share
+ * the same Spring context as every other integration test.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 public abstract class AbstractIntegrationTest {
 
     protected static final String DB_PASSWORD = "order-it";
