@@ -43,7 +43,10 @@ Chosen option: **"JPA for `Order`, `JdbcClient` elsewhere"**, because JPA is val
 
 ### Confirmation
 
-Integration tests: round-trip of `Order` through JPA, catalog reads and double `claim` through `JdbcClient` (Phase 2); test 1 shows an order and its outbox event committed or rolled back together even though they use different persistence styles (Phase 3); ArchUnit verifies the domain does not import JPA. Test 11 and test 14 exercise the `JdbcClient` reservation and savepoint (Phase 6).
+In `order-service`, verified by [`OrderRepositoryIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/adapter/out/persistence/OrderRepositoryIT.java)
+(JPA round trip of the order aggregate; a status change does not rewrite its items) and by the
+`JdbcClient` adapter tests in the same package. In `inventory-service`, savepoint-based stock
+reservation with the JDBC transaction manager will be verified by its reservation tests.
 
 ## Pros and Cons of the Options
 

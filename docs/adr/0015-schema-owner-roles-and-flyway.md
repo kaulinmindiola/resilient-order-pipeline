@@ -41,7 +41,10 @@ Chosen option: **"Each role owns its schema and Flyway runs with that role"**, b
 
 ### Confirmation
 
-Test 15 (*schema isolation*) checks that `order_svc` is denied access to `inventory_service`; the service startup tests prove that Flyway migrates successfully using only the service role. Verified in Phases 1 and 2.
+Verified by [`SchemaIsolationIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/SchemaIsolationIT.java),
+which shows that each role creates and drops objects in its own schema and that the application
+connection is not a superuser, and by [`SeedDataIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/SeedDataIT.java),
+which shows that Flyway applied every migration, including the Java seed, with the service role.
 
 ## Pros and Cons of the Options
 
