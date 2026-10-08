@@ -5,16 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.kaulinmindiola.rop.order.AbstractIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
-/** Test 6, issuance half: POST /auth/token (REQ-FUNC-007). */
+/** Test 6, issuance half: POST /auth/token is public and exchanges credentials (REQ-FUNC-007). */
 class TokenEndpointIT extends AbstractIntegrationTest {
-
-    @Autowired private MockMvcTester mvc;
 
     private MvcTestResult requestToken(String clientId, String clientSecret) {
         return mvc.post()

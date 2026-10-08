@@ -12,19 +12,18 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 class OrderApiIT extends AbstractIntegrationTest {
 
     private static final String ORDERS = "/api/v1/orders";
 
-    @Autowired private MockMvcTester mvc;
     @Autowired private JdbcClient jdbc;
 
-    private MvcTestResult postOrder(String body) {
+    private MvcTestResult postOrder(String token, String body) {
         return mvc.post()
                 .uri(ORDERS)
+                .header(HttpHeaders.AUTHORIZATION, token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
                 .exchange();
@@ -42,8 +41,10 @@ class OrderApiIT extends AbstractIntegrationTest {
     @DisplayName(
             "REQ-FUNC-005 REQ-FUNC-006 a created order returns 201 with Location and can be read back")
     void createAndReadOrder() {
+        String token = bearerToken();
         MvcTestResult created =
                 postOrder(
+                        token,
                         """
                 {"items":[{"productId":"SKU-001","quantity":3},
                           {"productId":"SKU-003","quantity":2}]}
@@ -61,7 +62,7 @@ class OrderApiIT extends AbstractIntegrationTest {
                 """
                                 .formatted(orderId));
 
-        assertThat(mvc.get().uri(location))
+        assertThat(mvc.get().uri(location).header(HttpHeaders.AUTHORIZATION, token))
                 .hasStatus(HttpStatus.OK)
                 .bodyJson()
                 .isLenientlyEqualTo(
@@ -87,10 +88,11 @@ class OrderApiIT extends AbstractIntegrationTest {
             })
     @DisplayName("REQ-FUNC-001 REQ-FUNC-002 a malformed request returns 400 and persists nothing")
     void malformedRequestIsRejected(String body) {
+        String token = bearerToken();
         int ordersBefore = ordersCount();
         int outboxBefore = outboxCount();
 
-        assertThat(postOrder(body)).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(postOrder(token, body)).hasStatus(HttpStatus.BAD_REQUEST);
 
         assertThat(ordersCount()).isEqualTo(ordersBefore);
         assertThat(outboxCount()).isEqualTo(outboxBefore);
