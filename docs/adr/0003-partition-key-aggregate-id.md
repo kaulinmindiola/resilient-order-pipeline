@@ -38,7 +38,10 @@ The outbox publisher uses `outbox_events.aggregate_id` as the record key ([ADR-0
 
 ### Confirmation
 
-Test 13 (*ordering by key*): events with the same `aggregateId` land in the same partition and are consumed in publication order. Verified in Phase 5.
+Verified by [`PartitionOrderingIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/adapter/out/kafka/PartitionOrderingIT.java):
+interleaved events of several aggregates are published, and each aggregate's events land in a
+single partition and are consumed in publication order. [`OutboxPublisherIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/adapter/out/kafka/OutboxPublisherIT.java)
+verifies that the record key is the order id.
 
 ## Pros and Cons of the Options
 

@@ -57,6 +57,15 @@ The publisher behaves as follows:
 * Integration test for republication when marking fails after a successful send.
 * Test 7 (*Kafka down*): with the broker paused, orders still return `201`; once resumed, events are published without intervention.
 
+Verified by [`OutboxPublisherTest`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/adapter/out/kafka/OutboxPublisherTest.java)
+(oldest first, ack-then-mark, the first failure ends the batch, retry on the next cycle,
+republication when marking fails), by [`OutboxPublisherIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/adapter/out/kafka/OutboxPublisherIT.java)
+and [`OutboxRepublicationIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/adapter/out/kafka/OutboxRepublicationIT.java)
+against a real broker, and by [`OutboxKafkaOutageIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/adapter/out/kafka/OutboxKafkaOutageIT.java):
+with the broker paused, orders are still created and their events stay pending; once it resumes,
+every event is published without intervention, and any duplicate carries the same `eventId`.
+Scheduled execution end to end will be verified by the system tests.
+
 ## Pros and Cons of the Options
 
 ### Embedded polling publisher
