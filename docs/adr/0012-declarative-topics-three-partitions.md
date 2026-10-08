@@ -49,7 +49,10 @@ Chosen option: **"`NewTopic` beans with 3 partitions and replication factor 1"**
 
 ### Confirmation
 
-After startup the six topics exist with 3 partitions, without `auto.create` or scripts; test 13 (*ordering by key*) relies on that topology. Verified in Phase 5.
+Verified by [`KafkaTopicsIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/adapter/out/kafka/KafkaTopicsIT.java):
+with broker-side auto-creation disabled, the five topics declared by `order-service` exist at
+startup with 3 partitions and replication factor 1. The topics declared by `inventory-service`
+will be verified by its equivalent test.
 
 ## Pros and Cons of the Options
 

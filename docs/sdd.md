@@ -8,14 +8,14 @@ September 10, 2026
 ## Table of Contents
 <!-- TOC -->
 * [1. Introduction](#1-introduction)
-  * [1.1 Document Purpose](#11-document-purpose)
-  * [1.2 Subject Scope](#12-subject-scope)
-  * [1.3 Definitions, Acronyms, and Abbreviations](#13-definitions-acronyms-and-abbreviations)
-  * [1.4 References](#14-references)
-  * [1.5 Document Overview](#15-document-overview)
+    * [1.1 Document Purpose](#11-document-purpose)
+    * [1.2 Subject Scope](#12-subject-scope)
+    * [1.3 Definitions, Acronyms, and Abbreviations](#13-definitions-acronyms-and-abbreviations)
+    * [1.4 References](#14-references)
+    * [1.5 Document Overview](#15-document-overview)
 * [2. Design Overview](#2-design-overview)
-  * [2.1 Stakeholder Concerns](#21-stakeholder-concerns)
-  * [2.2 Selected Viewpoints](#22-selected-viewpoints)
+    * [2.1 Stakeholder Concerns](#21-stakeholder-concerns)
+    * [2.2 Selected Viewpoints](#22-selected-viewpoints)
 * [3. Design Views](#3-design-views)
 * [4. Decisions](#4-decisions)
 * [5. Appendixes](#5-appendixes)
@@ -119,7 +119,7 @@ The 15 viewpoints in the `sdd-template.md` catalog were evaluated. Twelve were s
 
 #### 2.2.9 Interaction
 
-**Selected.** It is the heart of an event-driven system: both the happy path and the failure paths (Kafka down, duplicates, DLT) must be shown. See DV-009 through DV-012.
+**Selected.** It is the heart of an event-driven system: both the happy path and the failure paths (Kafka down, duplicates, DLT) must be shown. See DV-009 through DV-012 and DV-019.
 
 #### 2.2.10 Algorithm
 
@@ -266,7 +266,7 @@ classDiagram
 ```
 
 ```markdown
-- More Information: Implements REQ-FUNC-003/004/005. `OutboxEventRepository` is consumed both by the application service (to persist within the same transaction, ADR-0001) and by the `OutboxPublisherScheduler` adapter (to read pending events). No type in this diagram depends on Kafka or JPA (ADR-0006). Unlike inventory-service (DV-004), the order-service domain does **not** define an `EventPublisher` port: it never publishes directly to Kafka, it only writes to `OutboxEventRepository` â€” the actual publishing happens entirely in the `OutboxPublisherScheduler` adapter.
+- More Information: Implements REQ-FUNC-003/004/005. `OutboxEventRepository` is consumed both by the application service (to persist within the same transaction, ADR-0001) and by the `OutboxPublisher` adapter (to read pending events). No type in this diagram depends on Kafka or JPA (ADR-0006). Unlike inventory-service (DV-004), the order-service domain does **not** define an `EventPublisher` port: it never publishes directly to Kafka, it only writes to `OutboxEventRepository` â€” the actual publishing happens entirely in the `OutboxPublisher` adapter (see DV-019).
 ```
 
 ```markdown
@@ -323,7 +323,7 @@ graph LR
     end
     subgraph adapters["adapters (infrastructure)"]
         AJ["JPA Adapters"]
-        AK["Kafka Adapters<br/>(Producer, Listener, OutboxPublisherScheduler)"]
+        AK["Kafka Adapters<br/>(Producer, Listener, OutboxPublisher,<br/>OutboxSchedulingConfiguration)"]
         AR["REST Controllers"]
         AS["Security/JWT Adapter"]
     end
@@ -574,6 +574,50 @@ sequenceDiagram
 - More Information: Implements REQ-REL-001. References ADR-0004.
 ```
 
+```markdown
+- ID: DV-019
+- Title: Outbox Publisher — Structure, Test Behavior, Producer Configuration and Delivery Semantics
+- Viewpoint: Interaction
+- Representation: Narrative description and tables (complements DV-009, DV-010, DV-016)
+```
+
+**1. Scheduling separated from the work.** The publisher is split into two classes with distinct responsibilities:
+
+| Class | Responsibility | Knows about scheduling? |
+|---|---|---|
+| `OutboxPublisher` | Does the work of one cycle: reads pending events through `OutboxEventRepository.findPending()`, sends each one to Kafka (key = `aggregateId`, ADR-0003), and calls `markPublished(eventId)` once the broker acknowledges it. Exposes a plain method that performs a single polling cycle. | No |
+| `OutboxSchedulingConfiguration` | Enables Spring scheduling and triggers `OutboxPublisher` every `OUTBOX_POLLING_INTERVAL_MS` (default 5000, ADR-0001). It contains no publishing logic. | Yes |
+
+Because `OutboxPublisher` has no scheduling annotations, a test can invoke a single cycle deterministically instead of waiting for a timer. The trigger can also be switched off without touching the publishing logic.
+
+**2. Scheduling disabled in integration tests.** `OutboxSchedulingConfiguration` is not loaded in the integration test (IT) profile (it is guarded by a configuration property, e.g. `@ConditionalOnProperty`). The reason is the Spring test context cache: when different IT classes use different configurations, Spring keeps several application contexts alive at the same time within one test run. If each cached context started its own scheduler, there would be several `OutboxPublisher` instances polling the same `outbox_events` table concurrently. That breaks the single-publisher assumption of ADR-0001 (DV-016), which is deliberately not protected by `SELECT ... FOR UPDATE SKIP LOCKED`, and would produce duplicate publications and non-deterministic tests. With the trigger disabled, ITs call `OutboxPublisher` explicitly, so exactly one publisher acts at a time.
+
+**3. Producer configuration.** The producer is tuned so that a Kafka outage makes a cycle fail quickly and leave the event pending (DV-010), instead of blocking the scheduler thread.
+
+| Property | Value | Purpose |
+|---|---|---|
+| `acks` | `all` | The send is acknowledged only after the in-sync replicas have the record; `markPublished` is never called on an unconfirmed write. |
+| `enable.idempotence` | `true` | Removes duplicates caused by the producer's own internal retries within one producer session. |
+| `max.block.ms` | `3000` | Upper bound on waiting for metadata or buffer space when Kafka is unreachable. |
+| `request.timeout.ms` | `2000` | Time to wait for a single broker response before the request is retried or failed. |
+| `delivery.timeout.ms` | `5000` | Total time budget for one send, including retries. Must be at least `request.timeout.ms` plus `linger.ms`. |
+| Wait on the send future | `5s` | `OutboxPublisher` waits synchronously for the acknowledgement up to this limit; on timeout or error it stops the cycle and leaves the event pending. |
+
+The key and value serializers are string-based, and `bootstrap.servers` comes from `KAFKA_BOOTSTRAP_SERVERS` (Appendix A). The timeouts are kept in the same order of magnitude as the polling interval so that a failing cycle does not overlap the next one.
+
+**4. Delivery semantics: at-least-once.** The publisher guarantees that every committed event is published **at least once**, never zero times, but it does not guarantee exactly once. The `markPublished` update in PostgreSQL and the send to Kafka cannot share a transaction (no 2PC, ADR-0001), so a duplicate can appear from two sources:
+
+| # | Source of duplicates | What happens | Result |
+|---|---|---|---|
+| 1 | **Acknowledgement lost or timed out** | The broker persisted the record, but the acknowledgement does not reach the publisher before the timeout. The publisher treats the send as failed and leaves the event pending. | The next cycle sends the same event again. |
+| 2 | **Failure after the acknowledgement, before `markPublished` commits** | Kafka confirmed the record, but the service crashes or the database update fails before the event is marked as published. | After recovery, the event is still pending and is sent again. |
+
+In both cases the republished message carries the **same `eventId`**. Duplicates are absorbed downstream by the Idempotent Consumer (`processed_events`, DV-011 and DV-013), so the business effect is applied only once. Idempotence on the producer (`enable.idempotence`) covers only the producer's internal retries and does not remove these two sources, which is why consumer-side deduplication remains mandatory.
+
+```markdown
+- More Information: Implements REQ-FUNC-010 / REQ-FUNC-011. References ADR-0001, ADR-0003, ADR-0006. Source 1 and source 2 correspond to the failure window shown in DV-010, and the consumer side of the guarantee to DV-011.
+```
+
 ### 3.8 Algorithm
 
 ```markdown
@@ -657,10 +701,10 @@ stateDiagram-v2
 - Representation: Narrative description (no additional diagram; complements DV-009/DV-014)
 ```
 
-order-service runs as a single instance (an assumption of ADR-0001): the Outbox Publisher's `@Scheduled` task never runs concurrently with itself, so `SELECT ... FOR UPDATE SKIP LOCKED` is not required in this version. inventory-service, on the other hand, may receive concurrent messages from different partitions; correctness under concurrent `OrderCreated` events for the same `productId` does not depend on an application-level lock, but on the fact that the conditional `UPDATE` of DV-014 is atomic at the PostgreSQL engine level â€” two concurrent transactions on the same row are serialized automatically by the engine. Additionally, the `DefaultErrorHandler` (ADR-0004) blocks the advancement of a partition during the backoff window of a failed message, guaranteeing that there are never two processing attempts of the same message running in parallel.
+order-service runs as a single instance (an assumption of ADR-0001): the Outbox Publisher's `@Scheduled` task never runs concurrently with itself, so `SELECT ... FOR UPDATE SKIP LOCKED` is not required in this version. inventory-service, on the other hand, may receive concurrent messages from different partitions; correctness under concurrent `OrderCreated` events for the same `productId` does not depend on an application-level lock, but on the fact that the conditional `UPDATE` of DV-014 is atomic at the PostgreSQL engine level â€” two concurrent transactions on the same row are serialized automatically by the engine. Additionally, the `DefaultErrorHandler` (ADR-0004) blocks the advancement of a partition during the backoff window of a failed message, guaranteeing that there are never two processing attempts of the same message running in parallel. The single-publisher assumption is also why scheduling is disabled in integration tests (see DV-019, section 2).
 
 ```markdown
-- More Information: References ADR-0001, ADR-0004, ADR-0010.
+- More Information: References ADR-0001, ADR-0004, ADR-0010. Publisher design details in DV-019.
 ```
 
 ### 3.11 Patterns
@@ -838,7 +882,7 @@ All externalized via Docker Compose environment variables, none hardcoded in the
 | REQ-FUNC-003 / 004 / 005 | DV-003, DV-006, DV-009 | ADR-0001, ADR-0002 |
 | REQ-FUNC-006 | DV-007 | â€” |
 | REQ-FUNC-007 / 008 / 009 | DV-007 | ADR-0005 |
-| REQ-FUNC-010 / 011 | DV-001, DV-002, DV-009, DV-010, DV-016 | ADR-0001 |
+| REQ-FUNC-010 / 011 | DV-001, DV-002, DV-009, DV-010, DV-016, DV-019 | ADR-0001 |
 | REQ-FUNC-012 / 013 | DV-004, DV-006, DV-014 | ADR-0010 |
 | REQ-FUNC-014 / 015 | DV-009, DV-015 | â€” |
 | REQ-FUNC-016 | DV-004, DV-011, DV-013 | ADR-0002 |
