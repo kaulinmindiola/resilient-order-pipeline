@@ -23,6 +23,10 @@ import org.testcontainers.utility.MountableFile;
  * application is configured through the same variables Docker Compose uses and connects with the
  * service role, never as superuser (ADR-0015). API tests authenticate exactly like a real client:
  * through POST /auth/token.
+ *
+ * <p>The outbox publisher is not scheduled here: Spring keeps several test contexts alive at once,
+ * and each would run its own publisher against the same database. Tests that need publishing call
+ * {@code OutboxPublisher.publishPending()} explicitly (DI-17).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -63,6 +67,7 @@ public abstract class AbstractIntegrationTest {
         registry.add("SEED_CLIENT_ID", () -> SEED_CLIENT_ID);
         registry.add("SEED_CLIENT_SECRET", () -> SEED_CLIENT_SECRET);
         registry.add("JWT_SIGNING_SECRET", () -> JWT_SIGNING_SECRET);
+        registry.add("outbox.publisher.scheduling-enabled", () -> "false");
     }
 
     /** Value for the Authorization header, obtained from the real token endpoint. */
