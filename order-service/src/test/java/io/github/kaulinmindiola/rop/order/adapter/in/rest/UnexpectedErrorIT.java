@@ -9,11 +9,10 @@ import io.github.kaulinmindiola.rop.order.application.GetOrderService;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 /** An unexpected failure never leaks internal details to the client (AI-CONTEXT §5). */
@@ -21,7 +20,6 @@ class UnexpectedErrorIT extends AbstractIntegrationTest {
 
     private static final String INTERNAL_DETAIL = "connection to db-internal-host:5432 refused";
 
-    @Autowired private MockMvcTester mvc;
     @MockitoBean private GetOrderService getOrderService;
 
     @Test
@@ -29,7 +27,11 @@ class UnexpectedErrorIT extends AbstractIntegrationTest {
     void unexpectedErrorIsGeneric() throws Exception {
         when(getOrderService.get(any())).thenThrow(new IllegalStateException(INTERNAL_DETAIL));
 
-        MvcTestResult result = mvc.get().uri("/api/v1/orders/" + UUID.randomUUID()).exchange();
+        MvcTestResult result =
+                mvc.get()
+                        .uri("/api/v1/orders/" + UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .exchange();
 
         assertThat(result)
                 .hasStatus(HttpStatus.INTERNAL_SERVER_ERROR)

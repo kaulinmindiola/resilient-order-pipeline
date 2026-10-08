@@ -1,9 +1,18 @@
 package io.github.kaulinmindiola.rop.order;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.jayway.jsonpath.JsonPath;
+import java.io.UnsupportedEncodingException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.assertj.MockMvcTester;
+import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -12,8 +21,8 @@ import org.testcontainers.utility.MountableFile;
 /**
  * Real PostgreSQL and Kafka shared by every integration test in this service (DI-05). The
  * application is configured through the same variables Docker Compose uses and connects with the
- * service role, never as superuser (ADR-0015). MockMvc is configured here so that API tests share
- * the same Spring context as every other integration test.
+ * service role, never as superuser (ADR-0015). API tests authenticate exactly like a real client:
+ * through POST /auth/token.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -42,6 +51,8 @@ public abstract class AbstractIntegrationTest {
         Startables.deepStart(POSTGRES, KAFKA).join();
     }
 
+    @Autowired protected MockMvcTester mvc;
+
     @DynamicPropertySource
     static void environment(DynamicPropertyRegistry registry) {
         registry.add("DB_URL", POSTGRES::getJdbcUrl);
@@ -52,5 +63,27 @@ public abstract class AbstractIntegrationTest {
         registry.add("SEED_CLIENT_ID", () -> SEED_CLIENT_ID);
         registry.add("SEED_CLIENT_SECRET", () -> SEED_CLIENT_SECRET);
         registry.add("JWT_SIGNING_SECRET", () -> JWT_SIGNING_SECRET);
+    }
+
+    /** Value for the Authorization header, obtained from the real token endpoint. */
+    protected String bearerToken() {
+        MvcTestResult result =
+                mvc.post()
+                        .uri("/auth/token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                """
+                    {"clientId":"%s","clientSecret":"%s"}
+                    """
+                                        .formatted(SEED_CLIENT_ID, SEED_CLIENT_SECRET))
+                        .exchange();
+        assertThat(result).hasStatus(HttpStatus.OK);
+        try {
+            String accessToken =
+                    JsonPath.read(result.getResponse().getContentAsString(), "$.accessToken");
+            return "Bearer " + accessToken;
+        } catch (UnsupportedEncodingException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }
