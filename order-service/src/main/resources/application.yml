@@ -25,6 +25,11 @@ spring:
         request.timeout.ms: 5000
         delivery.timeout.ms: 10000
 
+outbox:
+  publisher:
+    polling-interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:5000}
+    scheduling-enabled: true
+
 security:
   jwt:
     secret: ${JWT_SIGNING_SECRET}
