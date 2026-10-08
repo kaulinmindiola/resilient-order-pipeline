@@ -56,6 +56,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SEED_CLIENT_ID: ${SEED_CLIENT_ID:?SEED_CLIENT_ID is required}
       SEED_CLIENT_SECRET: ${SEED_CLIENT_SECRET:?SEED_CLIENT_SECRET is required}
+      JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET:?JWT_SIGNING_SECRET is required}
     ports:
       - "8080:8080"
     depends_on:

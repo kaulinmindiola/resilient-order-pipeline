@@ -1,5 +1,6 @@
 package io.github.kaulinmindiola.rop.order.adapter.in.rest;
 
+import io.github.kaulinmindiola.rop.order.adapter.security.InvalidClientCredentialsException;
 import io.github.kaulinmindiola.rop.order.application.OrderNotFoundException;
 import io.github.kaulinmindiola.rop.order.application.UnknownProductException;
 import io.github.kaulinmindiola.rop.order.domain.model.InvalidOrderException;
@@ -69,6 +70,12 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(OrderNotFoundException.class)
     ProblemDetail orderNotFound(OrderNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    /** Same response for unknown client and wrong secret: clients cannot be enumerated (§5). */
+    @ExceptionHandler(InvalidClientCredentialsException.class)
+    ProblemDetail invalidCredentials(InvalidClientCredentialsException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
     /** Last resort: the client gets a generic message, the server log gets the full exception. */

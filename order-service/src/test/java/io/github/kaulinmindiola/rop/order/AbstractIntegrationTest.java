@@ -23,6 +23,7 @@ public abstract class AbstractIntegrationTest {
     protected static final String INVENTORY_DB_PASSWORD = "inventory-it";
     protected static final String SEED_CLIENT_ID = "it-client";
     protected static final String SEED_CLIENT_SECRET = "it-secret";
+    protected static final String JWT_SIGNING_SECRET = "it-jwt-signing-secret-0123456789-abcdef";
 
     protected static final PostgreSQLContainer POSTGRES =
             new PostgreSQLContainer("postgres:16")
@@ -50,5 +51,6 @@ public abstract class AbstractIntegrationTest {
         registry.add("KAFKA_BOOTSTRAP_SERVERS", KAFKA::getBootstrapServers);
         registry.add("SEED_CLIENT_ID", () -> SEED_CLIENT_ID);
         registry.add("SEED_CLIENT_SECRET", () -> SEED_CLIENT_SECRET);
+        registry.add("JWT_SIGNING_SECRET", () -> JWT_SIGNING_SECRET);
     }
 }
