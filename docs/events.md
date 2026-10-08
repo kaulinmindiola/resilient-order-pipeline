@@ -4,11 +4,11 @@ This document is the contract for every message exchanged through Kafka between 
 
 ## Overview
 
-| Event | Topic | Producer | Consumer (group) | Message key |
-|---|---|---|---|---|
-| `OrderCreated` | `order.created` | `order-service` | `inventory-service` | `aggregateId` |
-| `InventoryReserved` | `inventory.reserved` | `inventory-service` | `order-service` | `aggregateId` |
-| `InventoryRejected` | `inventory.rejected` | `inventory-service` | `order-service` | `aggregateId` |
+| Event               | Topic                | Producer            | Consumer (group)    | Message key   |
+| ------------------- | -------------------- | ------------------- | ------------------- | ------------- |
+| `OrderCreated`      | `order.created`      | `order-service`     | `inventory-service` | `aggregateId` |
+| `InventoryReserved` | `inventory.reserved` | `inventory-service` | `order-service`     | `aggregateId` |
+| `InventoryRejected` | `inventory.rejected` | `inventory-service` | `order-service`     | `aggregateId` |
 
 Each topic has a dead-letter topic (`order.created.DLT`, `inventory.reserved.DLT`, `inventory.rejected.DLT`) that receives records the consumer could not process. See [Failure handling](#failure-handling).
 
@@ -31,6 +31,8 @@ sequenceDiagram
 
 Every event, regardless of type, uses the same envelope. The Kafka record value is this JSON document serialized as a `String` (`StringSerializer` / `StringDeserializer`).
 
+The contract is defined by the presence and meaning of the following five fields. JSON object key order is not significant and consumers must not depend on the order in which fields appear.
+
 ```json
 {
   "eventId": "uuid",
@@ -41,19 +43,21 @@ Every event, regardless of type, uses the same envelope. The Kafka record value 
 }
 ```
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `eventId` | string (UUID) | yes | Unique identifier of the event. Consumers deduplicate on it (see [Delivery semantics](#delivery-semantics)). |
-| `eventType` | string | yes | One of `OrderCreated`, `InventoryReserved`, `InventoryRejected`. It also determines the topic. |
-| `occurredAt` | string (ISO-8601, UTC) | yes | Moment the event was created, set by the producer when it writes the event. |
-| `aggregateId` | string (max 64) | yes | Identifier of the aggregate the event belongs to. In this system it is always the `orderId`. |
-| `payload` | object | yes | Event-specific body, defined per event below. |
+| Field         | Type                   | Required | Description                                                                                                                                                                                                     |
+| ------------- | ---------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `eventId`     | string (UUID)          | yes      | Unique identifier of the event. Consumers deduplicate on it (see [Delivery semantics](#delivery-semantics)).                                                                                                    |
+| `eventType`   | string                 | yes      | One of `OrderCreated`, `InventoryReserved`, `InventoryRejected`. It also determines the topic.                                                                                                                  |
+| `occurredAt`  | string (ISO-8601, UTC) | yes      | Moment the event was created, set by the producer when it writes the event. The serialized value uses UTC (`Z`); fractional seconds may be present and consumers must not require a fixed fractional precision. |
+| `aggregateId` | string (max 64)        | yes      | Identifier of the aggregate the event belongs to. In this system it is always the `orderId`.                                                                                                                    |
+| `payload`     | object                 | yes      | Event-specific body, defined per event below.                                                                                                                                                                   |
+
+The Kafka record does not require event-type headers. The event type is carried by the `eventType` field in the JSON envelope.
 
 The `eventType` to topic mapping is resolved by the producer when it writes the event to its outbox (`outbox_events.topic`):
 
-| `eventType` | Topic |
-|---|---|
-| `OrderCreated` | `order.created` |
+| `eventType`         | Topic                |
+| ------------------- | -------------------- |
+| `OrderCreated`      | `order.created`      |
 | `InventoryReserved` | `inventory.reserved` |
 | `InventoryRejected` | `inventory.rejected` |
 
@@ -63,28 +67,40 @@ The `eventType` to topic mapping is resolved by the producer when it writes the 
 
 Emitted by `order-service` in the same transaction that persists a new order in status `PENDING`. It carries only what `inventory-service` needs to reserve stock. Prices and totals are intentionally not part of the event.
 
-| Payload field | Type | Required | Description |
-|---|---|---|---|
-| `orderId` | string (UUID) | yes | Identifier of the order. Equal to the envelope's `aggregateId`. |
-| `items` | array | yes | Items to reserve. Never empty. |
-| `items[].productId` | string (max 64) | yes | Product identifier. |
-| `items[].quantity` | integer | yes | Units requested. Always greater than 0. |
+| Payload field       | Type            | Required | Description                                                     |
+| ------------------- | --------------- | -------- | --------------------------------------------------------------- |
+| `orderId`           | string (UUID)   | yes      | Identifier of the order. Equal to the envelope's `aggregateId`. |
+| `items`             | array           | yes      | Items to reserve. Never empty.                                  |
+| `items[].productId` | string (max 64) | yes      | Product identifier.                                             |
+| `items[].quantity`  | integer         | yes      | Units requested. Always greater than 0.                         |
+
+The order of fields within the JSON `payload` object is not part of the contract. Consumers must read fields by name and must not depend on `orderId` appearing before or after `items`.
+
+The following example was captured from a real `order.created` Kafka record during verification of this contract:
 
 ```json
 {
-  "eventId": "3f6c1a52-8d0b-4c1e-9a77-2b5e4d9f01aa",
+  "eventId": "2eb28ac8-1ddb-4168-935c-8efd1df1a1f7",
   "eventType": "OrderCreated",
-  "occurredAt": "2026-10-05T14:30:12.345Z",
-  "aggregateId": "b2a8c7e0-5f1d-4e63-8a39-7c0d1e2f3a4b",
+  "occurredAt": "2026-10-08T15:38:43.218861Z",
+  "aggregateId": "bf071ff4-bf3d-406a-b678-0dd5d5dcbc05",
   "payload": {
-    "orderId": "b2a8c7e0-5f1d-4e63-8a39-7c0d1e2f3a4b",
     "items": [
-      { "productId": "SKU-001", "quantity": 2 },
-      { "productId": "SKU-003", "quantity": 1 }
-    ]
+      {
+        "quantity": 2,
+        "productId": "SKU-001"
+      },
+      {
+        "quantity": 1,
+        "productId": "SKU-003"
+      }
+    ],
+    "orderId": "bf071ff4-bf3d-406a-b678-0dd5d5dcbc05"
   }
 }
 ```
+
+The real record had Kafka key `bf071ff4-bf3d-406a-b678-0dd5d5dcbc05`, which is the same value as `aggregateId`, and had no Kafka headers.
 
 **Consumer behavior (`inventory-service`).** It reserves stock for **all** items or for none. If every item can be reserved, it decrements the stock and emits `InventoryReserved`. If any item cannot be reserved, no decrement is persisted and it emits `InventoryRejected`. A rejection is a business result, not an error.
 
@@ -92,9 +108,9 @@ Emitted by `order-service` in the same transaction that persists a new order in 
 
 Emitted by `inventory-service` when stock was reserved for every item of the order, in the same transaction that decrements the stock.
 
-| Payload field | Type | Required | Description |
-|---|---|---|---|
-| `orderId` | string (UUID) | yes | Identifier of the reserved order. Equal to the envelope's `aggregateId`. |
+| Payload field | Type          | Required | Description                                                              |
+| ------------- | ------------- | -------- | ------------------------------------------------------------------------ |
+| `orderId`     | string (UUID) | yes      | Identifier of the reserved order. Equal to the envelope's `aggregateId`. |
 
 ```json
 {
@@ -114,15 +130,15 @@ Emitted by `inventory-service` when stock was reserved for every item of the ord
 
 Emitted by `inventory-service` when the order could not be reserved. Any partial decrements are undone, and the event is committed in the same transaction as the idempotency claim.
 
-| Payload field | Type | Required | Description |
-|---|---|---|---|
-| `orderId` | string (UUID) | yes | Identifier of the rejected order. Equal to the envelope's `aggregateId`. |
-| `reason` | string (enum) | yes | Why the order was rejected: `INSUFFICIENT_STOCK` or `UNKNOWN_PRODUCT`. |
+| Payload field | Type          | Required | Description                                                              |
+| ------------- | ------------- | -------- | ------------------------------------------------------------------------ |
+| `orderId`     | string (UUID) | yes      | Identifier of the rejected order. Equal to the envelope's `aggregateId`. |
+| `reason`      | string (enum) | yes      | Why the order was rejected: `INSUFFICIENT_STOCK` or `UNKNOWN_PRODUCT`.   |
 
-| `reason` | Meaning |
-|---|---|
+| `reason`             | Meaning                                                                          |
+| -------------------- | -------------------------------------------------------------------------------- |
 | `INSUFFICIENT_STOCK` | The product has a stock row, but the available quantity is lower than requested. |
-| `UNKNOWN_PRODUCT` | The product has no stock row. |
+| `UNKNOWN_PRODUCT`    | The product has no stock row.                                                    |
 
 ```json
 {
@@ -141,30 +157,30 @@ Emitted by `inventory-service` when the order could not be reserved. Any partial
 
 ## Delivery semantics
 
-- **At-least-once.** An event can be delivered more than once: the outbox publisher may republish, and a consumer may crash between its database commit and its offset commit. Exactly-once delivery is out of scope.
-- **Idempotent consumers.** A consumer applies the effect of an event only once per `(eventId, consumer)`. Duplicates are logged and ignored ([ADR-0011](adr/0011-idempotent-consumer-single-local-transaction.md)). The `consumer` value is the consumer group name.
-- **Ordering per order.** The message key is the `aggregateId`, so all events of one order go to the same partition and are consumed in publication order ([ADR-0003](adr/0003-partition-key-aggregate-id.md)). There is no ordering guarantee across different orders.
-- **Atomic publication.** A producer writes the event to its outbox in the same local transaction as the state change it describes, and a polling publisher sends it to Kafka afterwards ([ADR-0001](adr/0001-transactional-outbox-polling-publisher.md), [ADR-0013](adr/0013-outbox-in-inventory-service.md)).
-- **Invalid transitions are no-ops.** An event that does not apply to the current state of the order (for example `InventoryReserved` on a `REJECTED` order), or that refers to an unknown aggregate, is recorded as processed and logged, without exception, retry or dead-letter entry.
+* **At-least-once.** An event can be delivered more than once: the outbox publisher may republish, and a consumer may crash between its database commit and its offset commit. Exactly-once delivery is out of scope.
+* **Idempotent consumers.** A consumer applies the effect of an event only once per `(eventId, consumer)`. Duplicates are logged and ignored ([ADR-0011](adr/0011-idempotent-consumer-single-local-transaction.md)). The `consumer` value is the consumer group name.
+* **Ordering per order.** The message key is the `aggregateId`, so all events of one order go to the same partition and are consumed in publication order ([ADR-0003](adr/0003-partition-key-aggregate-id.md)). There is no ordering guarantee across different orders.
+* **Atomic publication.** A producer writes the event to its outbox in the same local transaction as the state change it describes, and a polling publisher sends it to Kafka afterwards ([ADR-0001](adr/0001-transactional-outbox-polling-publisher.md), [ADR-0013](adr/0013-outbox-in-inventory-service.md)).
+* **Invalid transitions are no-ops.** An event that does not apply to the current state of the order (for example `InventoryReserved` on a `REJECTED` order), or that refers to an unknown aggregate, is recorded as processed and logged, without exception, retry or dead-letter entry.
 
 ## Topics and client configuration
 
 All six topics (three event topics and their `.DLT`) have **3 partitions and replication factor 1**, are declared by the services at startup and are never auto-created ([ADR-0012](adr/0012-declarative-topics-three-partitions.md)).
 
-| Side | Setting |
-|---|---|
+| Side     | Setting                                                                                                                                                                          |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Producer | `acks=all`, client idempotence enabled, `max.block.ms=5000`, `request.timeout.ms=5000`, `delivery.timeout.ms=10000`. The publisher waits for the acknowledgement for up to 15 s. |
-| Consumer | `auto.offset.reset=earliest`, auto-commit disabled, `AckMode.RECORD`. |
+| Consumer | `auto.offset.reset=earliest`, auto-commit disabled, `AckMode.RECORD`.                                                                                                            |
 
 ## Failure handling
 
 Failures while consuming follow [ADR-0004](adr/0004-consumer-retry-and-dead-letter-topics.md):
 
-| Situation | Behavior |
-|---|---|
-| Transient failure | One delivery plus 3 retries with backoff of 1 s, 2 s and 4 s. If it still fails, the record is published to `<topic>.DLT` and the consumer continues. |
-| Invalid JSON, payload outside this contract, or unknown `eventType` | `InvalidEventException`, not retryable. The record goes straight to `<topic>.DLT`. |
-| Record in the DLT | Published to the same partition and with the same key as the original record. It is kept for manual inspection; there is no automatic replay. |
+| Situation                                                           | Behavior                                                                                                                                              |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transient failure                                                   | One delivery plus 3 retries with backoff of 1 s, 2 s and 4 s. If it still fails, the record is published to `<topic>.DLT` and the consumer continues. |
+| Invalid JSON, payload outside this contract, or unknown `eventType` | `InvalidEventException`, not retryable. The record goes straight to `<topic>.DLT`.                                                                    |
+| Record in the DLT                                                   | Published to the same partition and with the same key as the original record. It is kept for manual inspection; there is no automatic replay.         |
 
 An order whose event ends up in a DLT stays in `PENDING`; there is no compensation in this version.
 
@@ -172,16 +188,17 @@ An order whose event ends up in a DLT stays in `PENDING`; there is no compensati
 
 The contract is kept backward compatible, since producer and consumer are deployed independently and there is no Schema Registry.
 
-- Existing fields keep their name, type and meaning.
-- New fields may be added only as optional, and consumers ignore fields they do not know.
-- A change that breaks any of the above requires a new `eventType`, not a modification of an existing one.
-- Any change to this contract is made in the same pull request as the code in **both** services and the affected tests.
+* Existing fields keep their name, type and meaning.
+* New fields may be added only as optional, and consumers ignore fields they do not know.
+* A change that breaks any of the above requires a new `eventType`, not a modification of an existing one.
+* JSON object key order is not part of the contract and consumers must not depend on it.
+* Any change to this contract is made in the same pull request as the code in **both** services and the affected tests.
 
 ## Related documents
 
-- [ADR-0001](adr/0001-transactional-outbox-polling-publisher.md) Transactional outbox
-- [ADR-0003](adr/0003-partition-key-aggregate-id.md) Message key
-- [ADR-0004](adr/0004-consumer-retry-and-dead-letter-topics.md) Retries and dead-letter topics
-- [ADR-0011](adr/0011-idempotent-consumer-single-local-transaction.md) Idempotent consumers
-- [ADR-0012](adr/0012-declarative-topics-three-partitions.md) Topics and partitions
-- [ADR-0016](adr/0016-independent-services-no-shared-module.md) No shared module
+* [ADR-0001](adr/0001-transactional-outbox-polling-publisher.md) Transactional outbox
+* [ADR-0003](adr/0003-partition-key-aggregate-id.md) Message key
+* [ADR-0004](adr/0004-consumer-retry-and-dead-letter-topics.md) Retries and dead-letter topics
+* [ADR-0011](adr/0011-idempotent-consumer-single-local-transaction.md) Idempotent consumers
+* [ADR-0012](adr/0012-declarative-topics-three-partitions.md) Topics and partitions
+* [ADR-0016](adr/0016-independent-services-no-shared-module.md) No shared module

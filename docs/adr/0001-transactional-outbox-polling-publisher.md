@@ -57,8 +57,6 @@ The publisher behaves as follows:
 * Integration test for republication when marking fails after a successful send.
 * Test 7 (*Kafka down*): with the broker paused, orders still return `201`; once resumed, events are published without intervention.
 
-Verified in Phase 5. Test links are added in the phase pull request.
-
 ## Pros and Cons of the Options
 
 ### Embedded polling publisher
