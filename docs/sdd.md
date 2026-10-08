@@ -806,7 +806,15 @@ The following 10 decisions were detailed and accepted in `MADR.md`. This section
 - More Information: MADR.md â†’ ADR-0010
 ```
 
-## 5. Appendixes
+## 5. Security
+
+### Architectural Security Decisions
+
+- **Zero Clock Skew Tolerance:** JWT validation is configured with zero seconds of clock skew tolerance. Since the token is self-issued and validated within the same internal infrastructure, there is no network delay or external clock synchronization drift to account for, making any tolerance window an unnecessary risk.
+- **Dummy Hash Calculation:** To prevent client enumeration via timing attacks, the authentication process executes a dummy hash computation when an unknown client or user is queried. This ensures that the response times for both valid and invalid clients remain indistinguishable.
+- **Deny-by-Default Policy:** The resource server enforces a strict deny-by-default access control policy (`anyRequest().authenticated()`). Only a single public endpoint (the token issuance point) is explicitly whitelisted, safely minimizing the exposed attack surface.
+
+## 6. Appendixes
 
 ### Appendix A â€” Environment Variables Reference
 

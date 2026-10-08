@@ -44,7 +44,14 @@ Chosen option: **"Nimbus encoder for issuance + Resource Server for validation"*
 
 ### Confirmation
 
-Test 6 (*authentication*): valid and invalid credentials; absent, malformed, foreign-signed and expired tokens. Test 16 (*logs*): no `Authorization` header, token or secret appears in logs. Verified in Phase 4.
+Verified by [`TokenServiceTest`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/adapter/security/TokenServiceTest.java)
+(HS256 header, `exp = iat + 30 min`, identical rejection for an unknown client and a wrong secret),
+[`TokenEndpointIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/adapter/in/rest/TokenEndpointIT.java)
+(public endpoint, byte-identical 401 bodies) and
+[`AuthenticationIT`](../../order-service/src/test/java/io/github/kaulinmindiola/rop/order/adapter/in/rest/AuthenticationIT.java)
+(missing, malformed, foreign-key and expired tokens are rejected with a 401 ProblemDetail and
+`WWW-Authenticate: Bearer`; a valid token reaches the API). Token validation applies no clock
+skew, because the issuer and the validator are the same process.
 
 ## Pros and Cons of the Options
 

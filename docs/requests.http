@@ -1,5 +1,14 @@
+### Obtain an access token (REQ-FUNC-007) - not OAuth2, see ADR-0005
+POST http://localhost:8080/auth/token
+Content-Type: application/json
+
+{ "clientId": "demo-client", "clientSecret": "demo-secret-change-me" }
+
+> {% client.global.set("token", response.body.accessToken); %}
+
 ### Create an order (REQ-FUNC-005)
 POST http://localhost:8080/api/v1/orders
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -13,18 +22,25 @@ Content-Type: application/json
 
 ### Read the order back (REQ-FUNC-006)
 GET http://localhost:8080{{orderLocation}}
+Authorization: Bearer {{token}}
+
+### 401 - no token (BR-012)
+GET http://localhost:8080{{orderLocation}}
 
 ### 400 - quantity must be positive (REQ-FUNC-002)
 POST http://localhost:8080/api/v1/orders
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "items": [ { "productId": "SKU-001", "quantity": 0 } ] }
 
 ### 422 - product not in the catalog (ADR-0014)
 POST http://localhost:8080/api/v1/orders
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "items": [ { "productId": "SKU-999", "quantity": 1 } ] }
 
 ### 404 - unknown order
 GET http://localhost:8080/api/v1/orders/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{token}}
