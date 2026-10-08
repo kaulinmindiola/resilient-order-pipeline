@@ -1,0 +1,30 @@
+### Create an order (REQ-FUNC-005)
+POST http://localhost:8080/api/v1/orders
+Content-Type: application/json
+
+{
+    "items": [
+        { "productId": "SKU-001", "quantity": 3 },
+        { "productId": "SKU-003", "quantity": 2 }
+    ]
+}
+
+> {% client.global.set("orderLocation", response.headers.valueOf("Location")); %}
+
+### Read the order back (REQ-FUNC-006)
+GET http://localhost:8080{{orderLocation}}
+
+### 400 - quantity must be positive (REQ-FUNC-002)
+POST http://localhost:8080/api/v1/orders
+Content-Type: application/json
+
+{ "items": [ { "productId": "SKU-001", "quantity": 0 } ] }
+
+### 422 - product not in the catalog (ADR-0014)
+POST http://localhost:8080/api/v1/orders
+Content-Type: application/json
+
+{ "items": [ { "productId": "SKU-999", "quantity": 1 } ] }
+
+### 404 - unknown order
+GET http://localhost:8080/api/v1/orders/00000000-0000-0000-0000-000000000000
