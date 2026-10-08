@@ -25,19 +25,18 @@ class ArchitectureTest {
                             "jakarta.persistence..",
                             "org.apache.kafka..",
                             "tools.jackson..",
-                            "com.fasterxml.jackson..")
-                    .allowEmptyShould(true);
+                            "com.fasterxml.jackson..");
 
     @ArchTest
-    static final ArchRule domainDoesNotDependOnOuterLayers =
+    static final ArchRule domainDependsOnNothingAbove =
             noClasses()
                     .that()
                     .resideInAPackage("..domain..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAnyPackage("..application..", "..adapter..")
-                    .allowEmptyShould(true);
+                    .resideInAnyPackage("..application..", "..adapter..");
 
+    // allowEmptyShould is removed once the application package has classes (Phase 7).
     @ArchTest
     static final ArchRule applicationDoesNotDependOnAdapters =
             noClasses()
