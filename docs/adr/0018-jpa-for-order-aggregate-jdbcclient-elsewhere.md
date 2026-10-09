@@ -31,7 +31,7 @@ Chosen option: **"JPA for `Order`, `JdbcClient` elsewhere"**, because JPA is val
 * `order-service`: JPA (Hibernate 7) for `Order` and its items; `JdbcClient` for `outbox_events`, `processed_events` (the `claim`), `products` and `client_credentials`.
 * `inventory-service` uses no JPA at all: `JdbcClient` for `stock`, `outbox_events` and `processed_events`.
 * JPA entities live in the adapter, and the domain `Order` is mapped explicitly to and from them.
-* `@Transactional` sits on application use cases. The reservation savepoint is created in the adapter via `TransactionAspectSupport.currentTransactionStatus()`.
+* `@Transactional` sits on application use cases. The reservation savepoint is created in the adapter directly on the current transaction's connection using `DataSourceUtils.getConnection(dataSource)`.
 
 ### Consequences
 
