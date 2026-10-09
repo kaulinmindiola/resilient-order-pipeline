@@ -34,21 +34,23 @@ Chosen option: **"Conditional atomic UPDATE with a savepoint"**, because the eng
 
 ```text
 tryReserve(items):                       # runs inside the consumer transaction
-    sp = createSavepoint()
+    connection = DataSourceUtils.getConnection(dataSource)
+    sp = connection.setSavepoint()
     for item in items sorted by productId:
         rows = UPDATE stock SET quantity = quantity - :qty
                WHERE product_id = :id AND quantity >= :qty
         if rows != 1:
-            rollbackToSavepoint(sp)
+            connection.rollback(sp)
+            connection.releaseSavepoint(sp)
             reason = stockRowExists(item.productId) ? INSUFFICIENT_STOCK : UNKNOWN_PRODUCT
             return REJECTED(reason)
-    releaseSavepoint(sp)
+    connection.releaseSavepoint(sp)
     return RESERVED
 ```
 
 * Items are processed in `productId` order, so concurrent orders acquire row locks in the same order and cannot deadlock.
-* The savepoint is taken before the first decrement. A rejection rolls back only to the savepoint, undoing partial decrements while leaving the surrounding transaction healthy; the rejection is then committed with the claim and the outbox event.
-* `tryReserve` never marks the transaction rollback-only. Only infrastructure failures surface as exceptions.
+* The savepoint is taken before the first decrement on the caller's JDBC transaction connection via `DataSourceUtils.getConnection(dataSource)`. A rejection rolls back only to the savepoint, undoing partial decrements while leaving the surrounding transaction healthy; the rejection is then committed with the claim and the outbox event.
+* `tryReserve` requires an active transaction (`IllegalStateException` if missing) and never marks the transaction rollback-only. Only infrastructure failures surface as exceptions.
 * `stock.quantity` is *available* stock with `CHECK (quantity >= 0)`. Reserved stock is never released in v1 (BR-016).
 
 ### Consequences
