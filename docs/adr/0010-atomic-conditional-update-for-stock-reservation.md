@@ -63,11 +63,14 @@ tryReserve(items):                       # runs inside the consumer transaction
 
 ### Confirmation
 
-* Test 11 (*concurrency*): N concurrent reservations of one product with stock for one yield exactly one reservation, the rest rejected, and `quantity` never negative.
-* Test 14 (*committed rejection*): a 2-item order whose second item lacks stock, and a variant with a product that has no stock row, perform no decrement; `InventoryRejected` is in the outbox and the `processed_events` row is committed in the same transaction; redelivery is a no-op.
-* An integration test runs the rejection inside an outer transaction that then commits successfully.
-
-Verified in Phase 6 (test 11 is run repeatedly to rule out flakiness).
+Verified by [`StockReservationIT`](../../inventory-service/src/test/java/io/github/kaulinmindiola/rop/inventory/adapter/out/persistence/StockReservationIT.java)
+(all-or-nothing: a partial reservation is undone; insufficient stock and unknown products are
+rejected with their reason; a rejection does not abort the caller's transaction, whose other
+writes commit) and by [`ConcurrentReservationIT`](../../inventory-service/src/test/java/io/github/kaulinmindiola/rop/inventory/adapter/out/persistence/ConcurrentReservationIT.java)
+(test 11: of 20 concurrent reservations of the last unit exactly one succeeds and stock never goes
+negative; reservations listing the same products in opposite orders complete without deadlocks).
+[`StockSchemaIT`](../../inventory-service/src/test/java/io/github/kaulinmindiola/rop/inventory/StockSchemaIT.java)
+verifies that the database rejects negative stock independently of the reservation logic.
 
 ## Pros and Cons of the Options
 
